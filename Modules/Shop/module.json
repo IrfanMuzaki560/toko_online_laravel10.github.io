@@ -1,0 +1,12 @@
+{
+    "name": "Shop",
+    "alias": "shop",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": ["Modules\\Shop\\Providers\\ShopServiceProvider"],
+    "files": ["Helpers/shop_helper.php"],
+    "paths": {
+        "controllers": "Http/Controllers"
+    }
+}

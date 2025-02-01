@@ -1,0 +1,9 @@
+// Bootstrap
+@use "sass:meta";
+@use "bootstrap/scss/bootstrap";
+
+// Fonts (tidak perlu diubah)
+@import url("https://fonts.bunny.net/css?family=Nunito");
+
+// Variables
+@include meta.load-css("variables");
