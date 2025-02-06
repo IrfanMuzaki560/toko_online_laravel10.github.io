@@ -13,7 +13,6 @@ use Modules\Shop\Repositories\Front\Interfaces\OrderRepositoryInterface;
 
 class OrderController extends Controller
 {
-
     protected $addressRepository;
     protected $cartRepository;
     protected $orderRepository;
@@ -42,11 +41,11 @@ class OrderController extends Controller
         DB::beginTransaction();
         try {
             $order = $this->orderRepository->create($request->user(), $cart, $address, $selectedShipping);
+            DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
         }
-        DB::commit();
 
         $this->cartRepository->clear(auth()->user());
 
@@ -58,26 +57,21 @@ class OrderController extends Controller
         $address = $this->addressRepository->findByID($request->get('address_id'));
         $cart = $this->cartRepository->findByUser(auth()->user());
 
+        if (!$address || !$cart) {
+            return [
+                'delivery_package' => $request->get('delivery_package'),
+                'courier' => $request->get('courier'),
+                'shipping_fee' => 0,
+            ];
+        }
+
         $availableServices = $this->calculateShippingFee($cart, $address, $request->get('courier'));
-
-        $selectedPackage = null;
-        if (!empty($availableServices)) {
-            foreach ($availableServices as $service) {
-                if ($service['service'] === $request->get('delivery_package')) {
-                    $selectedPackage = $service;
-                    continue;
-                }
-            }
-        }
-
-        if ($selectedPackage == null) {
-            return [];
-        }
+        $selectedPackage = collect($availableServices)->firstWhere('service', $request->get('delivery_package'));
 
         return [
             'delivery_package' => $request->get('delivery_package'),
             'courier' => $request->get('courier'),
-            'shipping_fee' => $selectedPackage['cost'],
+            'shipping_fee' => $selectedPackage['cost'] ?? 0,
         ];
     }
 
@@ -96,31 +90,16 @@ class OrderController extends Controller
         $cart = $this->cartRepository->findByUser(auth()->user());
 
         $availableServices = $this->calculateShippingFee($cart, $address, $request->get('courier'));
-
-        $selectedPackage = null;
-        if (!empty($availableServices)) {
-            foreach ($availableServices as $service) {
-                if ($service['service'] === $request->get('delivery_package')) {
-                    $selectedPackage = $service;
-                    continue;
-                }
-            }
-        }
-
-        if ($selectedPackage == null) {
-            return [];
-        }
+        $selectedPackage = collect($availableServices)->firstWhere('service', $request->get('delivery_package'));
 
         return [
-            'shipping_fee' => number_format($selectedPackage['cost']),
-            'grand_total' => number_format($cart->grand_total + $selectedPackage['cost']),
+            'shipping_fee' => number_format($selectedPackage['cost'] ?? 0),
+            'grand_total' => number_format($cart->grand_total + ($selectedPackage['cost'] ?? 0)),
         ];
     }
 
     private function calculateShippingFee($cart, $address, $courier)
     {
-        $shippingFees = [];
-
         try {
             $response = Http::withHeaders([
                 'key' => env('API_ONGKIR_KEY'),
@@ -136,24 +115,17 @@ class OrderController extends Controller
             return [];
         }
 
-        $availableServices = [];
-        if (!empty($shippingFees['rajaongkir']['results'])) {
-            foreach ($shippingFees['rajaongkir']['results'] as $cost) {
-                if (!empty($cost['costs'])) {
-                    foreach ($cost['costs'] as $costDetail) {
-                        $availableServices[] = [
-                            'service' => $costDetail['service'],
-                            'description' => $costDetail['description'],
-                            'etd' => $costDetail['cost'][0]['etd'],
-                            'cost' => $costDetail['cost'][0]['value'],
-                            'courier' => $courier,
-                            'address_id' => $address->id,
-                        ];
-                    }
-                }
-            }
-        }
-
-        return $availableServices;
+        return collect($shippingFees['rajaongkir']['results'] ?? [])->flatMap(function ($cost) use ($courier, $address) {
+            return collect($cost['costs'] ?? [])->map(function ($costDetail) use ($courier, $address) {
+                return [
+                    'service' => $costDetail['service'],
+                    'description' => $costDetail['description'],
+                    'etd' => $costDetail['cost'][0]['etd'] ?? 'N/A',
+                    'cost' => $costDetail['cost'][0]['value'] ?? 0,
+                    'courier' => $courier,
+                    'address_id' => $address->id,
+                ];
+            });
+        })->all();
     }
 }

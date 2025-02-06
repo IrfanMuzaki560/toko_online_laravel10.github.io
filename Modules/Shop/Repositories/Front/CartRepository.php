@@ -10,7 +10,6 @@ use Modules\Shop\Repositories\Front\Interfaces\CartRepositoryInterface;
 
 class CartRepository implements CartRepositoryInterface
 {
-
     public function findByUser(User $user): Cart
     {
         $cart = Cart::with([
@@ -86,7 +85,6 @@ class CartRepository implements CartRepositoryInterface
         $baseTotalPrice = 0;
         $taxAmount = 0;
         $discountAmount = 0;
-        $discountPercent = 0;
         $grandTotal = 0;
         $totalWeight = 0;
 
@@ -107,7 +105,9 @@ class CartRepository implements CartRepositoryInterface
         $taxAmount = 0.11 * $nettTotal;
         $grandTotal = $nettTotal + $taxAmount;
 
-        if ($baseTotalPrice) {
+        // Calculate discount percent only if baseTotalPrice is greater than zero
+        $discountPercent = 0; // Default value
+        if ($baseTotalPrice > 0) {
             $discountPercent = ($discountAmount / $baseTotalPrice) * 100;
         }
 
